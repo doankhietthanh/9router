@@ -18,6 +18,7 @@ import dynamic from "next/dynamic";
 // Lazy-load: keeps @xyflow/react out of the shared bundle until topology renders
 const ProviderTopology = dynamic(() => import("@/app/(dashboard)/dashboard/usage/components/ProviderTopology"), { ssr: false });
 import UsageChart from "@/app/(dashboard)/dashboard/usage/components/UsageChart";
+import ApiKeyCostChart from "@/app/(dashboard)/dashboard/usage/components/ApiKeyCostChart";
 
 function timeAgo(timestamp) {
   const diff = Math.floor((Date.now() - new Date(timestamp)) / 1000);
@@ -479,6 +480,9 @@ export default function UsageStats({ period: periodProp, setPeriod: setPeriodPro
           <RecentRequests requests={stats.recentRequests || []} />
         </div>
       )}
+
+      {/* Top API key spenders */}
+      {loading ? spinner : <ApiKeyCostChart byApiKey={stats.byApiKey} />}
 
       {/* Token / Cost chart - sync period */}
       {loading ? spinner : <UsageChart period={period} />}
