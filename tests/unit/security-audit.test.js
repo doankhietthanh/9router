@@ -53,10 +53,14 @@ describe("AUDIT-002: API key masking", () => {
       path.resolve("src/lib/db/repos/usageRepo.js"),
       "utf-8"
     );
-    // The 24h path should use apiKeyMasked in the akKey template
-    expect(source).toContain("${apiKeyMasked}|${r.model}|${r.provider");
-    // Should NOT use raw r.apiKey in the key
+    // Group keys must be safe for REST response object keys, but not use the
+    // short display mask because different API keys can share the same prefix.
+    expect(source).toContain("function getApiKeyStatsKey");
+    expect(source).toContain("createHash(\"sha256\").update(apiKey)");
+    expect(source).toContain("getApiKeyStatsKey(r.apiKey, r.model, r.provider)");
+    // Should NOT use raw r.apiKey or the display mask in the grouping key
     expect(source).not.toContain("${r.apiKey}|${r.model}|${r.provider");
+    expect(source).not.toContain("${apiKeyMasked}|${r.model}|${r.provider");
   });
 });
 

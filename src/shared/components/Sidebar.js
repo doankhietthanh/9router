@@ -9,6 +9,7 @@ import { APP_CONFIG, UPDATER_CONFIG } from "@/shared/constants/config";
 import { MEDIA_PROVIDER_KINDS } from "@/shared/constants/providers";
 import { useCopyToClipboard } from "@/shared/hooks/useCopyToClipboard";
 import Button from "./Button";
+import Toggle from "./Toggle";
 import { ConfirmModal } from "./Modal";
 import NineRemotePromoModal from "./NineRemotePromoModal";
 
@@ -16,6 +17,7 @@ import NineRemotePromoModal from "./NineRemotePromoModal";
 const VISIBLE_MEDIA_KINDS = ["embedding", "image", "video", "tts", "stt"];
 // Combined entry: webSearch + webFetch share one page at /dashboard/media-providers/web
 const COMBINED_WEB_ITEM = { id: "web", label: "Web Fetch & Search", icon: "travel_explore", href: "/dashboard/media-providers/web" };
+const SIDEBAR_MODE_STORAGE_KEY = "9router:sidebar-mode";
 
 const navItems = [
   { href: "/dashboard/endpoint", label: "Endpoint & Key", icon: "api" },
@@ -27,6 +29,13 @@ const navItems = [
   { href: "/dashboard/token-saver", label: "Token Saver", icon: "savings" },
   // { href: "/dashboard/pxpipe", label: "PXPIPE", icon: "image" },
   { href: "/dashboard/cli-tools", label: "CLI Tools", icon: "terminal" },
+];
+
+const simpleNavItems = [
+  { href: "/dashboard", label: "Dashboard", icon: "dashboard" },
+  { href: "/dashboard/usage", label: "Usage", icon: "bar_chart" },
+  { href: "/dashboard/quota", label: "Quota Tracker", icon: "data_usage" },
+  { href: "/dashboard/profile", label: "Settings", icon: "settings" },
 ];
 
 const debugItems = [
@@ -49,9 +58,21 @@ export default function Sidebar({ onClose }) {
   const [isUpdating, setIsUpdating] = useState(false);
   const [shutdownCountdown, setShutdownCountdown] = useState(0);
   const [enableTranslator, setEnableTranslator] = useState(false);
+  const [sidebarMode, setSidebarMode] = useState("simple");
   const { copied, copy } = useCopyToClipboard(2000);
 
   const INSTALL_CMD = UPDATER_CONFIG.installCmdLatest;
+
+  useEffect(() => {
+    try {
+      const savedMode = localStorage.getItem(SIDEBAR_MODE_STORAGE_KEY);
+      if (savedMode === "simple" || savedMode === "complex") {
+        setSidebarMode(savedMode);
+      }
+    } catch {
+      // Ignore storage access errors in restricted browsers.
+    }
+  }, []);
 
   useEffect(() => {
     fetch("/api/settings")
@@ -69,11 +90,51 @@ export default function Sidebar({ onClose }) {
   }, []);
 
   const isActive = (href) => {
+    if (href === "/dashboard") {
+      return pathname === "/dashboard" || pathname.startsWith("/dashboard/endpoint");
+    }
     if (href === "/dashboard/endpoint") {
       return pathname === "/dashboard" || pathname.startsWith("/dashboard/endpoint");
     }
     return pathname.startsWith(href);
   };
+
+  const isComplexMode = sidebarMode === "complex";
+
+  const handleSidebarModeChange = (checked) => {
+    const nextMode = checked ? "complex" : "simple";
+    setSidebarMode(nextMode);
+    try {
+      localStorage.setItem(SIDEBAR_MODE_STORAGE_KEY, nextMode);
+    } catch {
+      // Ignore storage access errors in restricted browsers.
+    }
+  };
+
+  const renderNavLink = (item, className = "px-3") => (
+    <Link
+      key={item.href}
+      href={item.href}
+      onClick={onClose}
+      className={cn(
+        "flex items-center gap-3 py-1 rounded-lg transition-all group",
+        className,
+        isActive(item.href)
+          ? "bg-primary/10 text-primary"
+          : "text-text-muted hover:bg-surface-2 hover:text-text-main"
+      )}
+    >
+      <span
+        className={cn(
+          "material-symbols-outlined text-[18px]",
+          isActive(item.href) ? "fill-1" : "group-hover:text-primary transition-colors"
+        )}
+      >
+        {item.icon}
+      </span>
+      <span className="text-[13px] font-medium">{item.label}</span>
+    </Link>
+  );
 
   // Open manual update panel (no countdown yet — user must click Copy to trigger shutdown)
   const handleUpdate = () => {
@@ -154,36 +215,29 @@ export default function Sidebar({ onClose }) {
               </div>
             </div>
           )}
+          <div className="mt-1 flex items-center justify-between rounded-lg border border-border/60 bg-surface/60 px-3 py-2">
+            <div className="flex min-w-0 flex-col">
+              <span className="text-xs font-semibold text-text-main">
+                {isComplexMode ? "Complex mode" : "Simple mode"}
+              </span>
+              <span className="text-[11px] text-text-muted">
+                {isComplexMode ? "Show all menus" : "Show core menus"}
+              </span>
+            </div>
+            <Toggle
+              checked={isComplexMode}
+              onChange={handleSidebarModeChange}
+              size="sm"
+            />
+          </div>
         </div>
 
         {/* Navigation */}
         <nav className="flex-1 px-4 py-2 space-y-0.5 overflow-y-auto custom-scrollbar">
-          {navItems.map((item) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              onClick={onClose}
-              className={cn(
-                "flex items-center gap-3 px-3 py-1 rounded-lg transition-all group",
-                isActive(item.href)
-                  ? "bg-primary/10 text-primary"
-                  : "text-text-muted hover:bg-surface-2 hover:text-text-main"
-              )}
-            >
-              <span
-                className={cn(
-                  "material-symbols-outlined text-[18px]",
-                  isActive(item.href) ? "fill-1" : "group-hover:text-primary transition-colors"
-                )}
-              >
-                {item.icon}
-              </span>
-              <span className="text-[13px] font-medium">{item.label}</span>
-            </Link>
-          ))}
+          {(isComplexMode ? navItems : simpleNavItems).map((item) => renderNavLink(item))}
 
           {/* System section */}
-          <div className="pt-3 mt-2 space-y-0.5">
+          {isComplexMode && <div className="pt-3 mt-2 space-y-0.5">
             <p className="px-4 text-xs font-semibold text-text-muted/60 uppercase tracking-wider mb-2">
               System
             </p>
@@ -343,7 +397,7 @@ export default function Sidebar({ onClose }) {
               </span>
               <span className="text-[13px] font-medium">Settings</span>
             </Link>
-          </div>
+          </div>}
         </nav>
 
       </aside>
