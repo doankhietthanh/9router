@@ -32,7 +32,6 @@ const navItems = [
 ];
 
 const simpleNavItems = [
-  { href: "/dashboard", label: "Dashboard", icon: "dashboard" },
   { href: "/dashboard/usage", label: "Usage", icon: "bar_chart" },
   { href: "/dashboard/quota", label: "Quota Tracker", icon: "data_usage" },
   { href: "/dashboard/profile", label: "Settings", icon: "settings" },
