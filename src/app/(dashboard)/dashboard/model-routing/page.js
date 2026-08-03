@@ -315,9 +315,6 @@ function RouteCard({ route, onEdit, onToggle, onDelete }) {
         ) : (
           <p className="text-sm text-text-muted">No usable connections</p>
         )}
-        {route.invalidConnectionIds?.length > 0 && (
-          <p className="text-xs text-amber-600">Stale connection IDs: {route.invalidConnectionIds.join(", ")}</p>
-        )}
       </div>
     </Card>
   );
