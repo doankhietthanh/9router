@@ -114,7 +114,7 @@ Management domains:
 - Providers/connections: `src/app/api/providers*`
 - Provider nodes: `src/app/api/provider-nodes*`
 - OAuth: `src/app/api/oauth/*`
-- Keys/aliases/combos/pricing: `src/app/api/keys*`, `src/app/api/models/alias`, `src/app/api/combos*`, `src/app/api/pricing`
+- Keys/aliases/combos/model routing/pricing: `src/app/api/keys*`, `src/app/api/models/alias`, `src/app/api/combos*`, `src/app/api/model-routing*`, `src/app/api/pricing`
 - Usage: `src/app/api/usage/*`
 - Sync/cloud: `src/app/api/sync/*`, `src/app/api/cloud/*`
 - CLI tooling helpers: `src/app/api/cli-tools/*`
@@ -128,6 +128,7 @@ Main flow modules:
 - Provider execution adapters: `open-sse/executors/*`
 - Format detection/provider config: `open-sse/services/provider.js`
 - Model parse/resolve: `src/sse/services/model.js`, `open-sse/services/model.js`
+- Model connection routing: `src/sse/services/modelRouting.js`, `src/app/api/model-routing*`
 - Account fallback logic: `open-sse/services/accountFallback.js`
 - Translation registry: `open-sse/translator/index.js`
 - Stream transformations: `open-sse/utils/stream.js`, `open-sse/utils/streamHandler.js`
@@ -139,7 +140,7 @@ Primary state DB:
 
 - `src/lib/localDb.js`
 - file: `${DATA_DIR}/db.json` (or `~/.9router/db.json` when `DATA_DIR` is unset)
-- entities: providerConnections, providerNodes, modelAliases, combos, apiKeys, settings, pricing
+- entities: providerConnections, providerNodes, modelRoutes, modelAliases, combos, apiKeys, settings, pricing
 
 Usage DB:
 
@@ -238,6 +239,21 @@ flowchart TD
 ```
 
 Fallback decisions are driven by `open-sse/services/accountFallback.js` using status codes and error-message heuristics.
+
+## Model-to-Connection Routing
+
+`modelRoutes` stores exact canonical model IDs and ordered `connectionId`
+allowlists. The chat handler resolves aliases and the model provider first, then
+loads the route before credential selection. An active route is fail-closed:
+only existing, active connections matching the model provider are eligible, and
+401/429/5xx fallback can try only the next connection in that allowlist. If the
+allowlist is exhausted, the request fails without trying another provider
+connection. Models without an active route retain the legacy provider-wide
+selection behavior.
+
+The Dashboard manages these records at `/dashboard/model-routing`; its API is
+`/api/model-routing`. Connection credentials are never returned by the route
+management API.
 
 ## OAuth Onboarding and Token Refresh Lifecycle
 

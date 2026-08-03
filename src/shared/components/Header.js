@@ -77,6 +77,13 @@ const getPageInfo = (pathname) => {
       icon: "dns",
       breadcrumbs: [],
     };
+  if (pathname.includes("/model-routing"))
+    return {
+      title: "Model Routing",
+      description: "Restrict models to specific provider connections",
+      icon: "alt_route",
+      breadcrumbs: [],
+    };
   if (pathname.includes("/combos"))
     return {
       title: "Combos",

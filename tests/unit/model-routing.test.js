@@ -56,6 +56,25 @@ describe("model route persistence", () => {
       "At least one connectionId is required for an active route"
     );
   });
+
+  it("includes model routes in database export and import", async () => {
+    const { upsertModelRoute } = await import("@/lib/db/repos/modelRoutesRepo.js");
+    const { exportDb, importDb } = await import("@/lib/db/index.js");
+
+    await upsertModelRoute("gpt-5.6-sol", ["a", "b"]);
+    const exported = await exportDb();
+    expect(exported.modelRoutes).toEqual(expect.arrayContaining([
+      expect.objectContaining({ model: "gpt-5.6-sol", connectionIds: ["a", "b"] }),
+    ]));
+
+    await importDb({ modelRoutes: [{ model: "gpt-5.6-lunna", connectionIds: ["c"], isActive: true }] });
+    const { getModelRouteByModel } = await import("@/lib/db/repos/modelRoutesRepo.js");
+    expect(await getModelRouteByModel("gpt-5.6-sol")).toBeNull();
+    expect(await getModelRouteByModel("gpt-5.6-lunna")).toEqual(expect.objectContaining({
+      connectionIds: ["c"],
+      isActive: true,
+    }));
+  });
 });
 
 describe("model route resolution", () => {
@@ -137,5 +156,66 @@ describe("credential selection scope", () => {
 
     expect(["a", "b"]).toContain(credentials.connectionId);
     expect(credentials.connectionId).not.toBe("c");
+  });
+});
+
+describe("model route management API", () => {
+  it("rejects a connection from a different provider", async () => {
+    vi.doMock("@/lib/localDb", () => ({
+      getModelRoutes: vi.fn(async () => []),
+      getModelRouteByModel: vi.fn(async () => null),
+      upsertModelRoute: vi.fn(),
+      getProviderConnectionById: vi.fn(async () => ({ id: "anthropic-1", provider: "anthropic", isActive: true })),
+      getProviderConnections: vi.fn(async () => [
+        { id: "anthropic-1", provider: "anthropic", isActive: true },
+      ]),
+    }));
+    vi.doMock("@/sse/services/model.js", () => ({
+      getModelInfo: vi.fn(async () => ({ provider: "openai", model: "gpt-5.6-sol" })),
+    }));
+    const { POST } = await import("@/app/api/model-routing/route.js");
+    const response = await POST(new Request("http://localhost/api/model-routing", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ model: "gpt-5.6-sol", connectionIds: ["anthropic-1"] }),
+    }));
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({
+      error: "Selected connections must match the model provider",
+    });
+  });
+
+  it("does not expose credentials in GET responses", async () => {
+    vi.doMock("@/lib/localDb", () => ({
+      getModelRoutes: vi.fn(async () => [{
+        model: "gpt-5.6-sol",
+        connectionIds: ["openai-1"],
+        isActive: true,
+        createdAt: "2026-08-04T00:00:00.000Z",
+        updatedAt: "2026-08-04T00:00:00.000Z",
+      }]),
+      getProviderConnections: vi.fn(async () => [{
+        id: "openai-1",
+        provider: "openai",
+        name: "Account A",
+        apiKey: "secret",
+        accessToken: "secret-token",
+        isActive: true,
+      }]),
+    }));
+    const { GET } = await import("@/app/api/model-routing/route.js");
+    const response = await GET();
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.routes[0].connections[0]).toEqual({
+      id: "openai-1",
+      provider: "openai",
+      name: "Account A",
+      email: null,
+      isActive: true,
+    });
+    expect(JSON.stringify(body)).not.toContain("secret");
   });
 });
