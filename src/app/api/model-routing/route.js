@@ -52,7 +52,9 @@ async function validateRouteInput(model, connectionIds, isActive) {
   }
 
   return {
-    model: modelInfo.model || normalizedModel,
+    // Keep the exact client model key, including provider aliases such as cx/.
+    // The runtime resolver uses the resolved model separately for provider checks.
+    model: normalizedModel,
     connectionIds: normalizedIds,
     isActive: isActive !== false,
   };

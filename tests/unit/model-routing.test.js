@@ -128,6 +128,26 @@ describe("model route resolution", () => {
     await expect(resolveModelConnectionRoute({ provider: "openai", model: "gpt-5.6-sol" }))
       .resolves.toEqual({ hasRule: true, connectionIds: [], invalidConnectionIds: ["missing"] });
   });
+
+  it("looks up a prefixed route key before the legacy bare model key", async () => {
+    const getModelRouteByModel = vi.fn(async (key) => (
+      key === "cx/gpt-5.6-luna"
+        ? { model: key, connectionIds: ["codex-1"], isActive: true }
+        : null
+    ));
+    vi.doMock("@/lib/localDb", () => ({
+      getModelRouteByModel,
+      getProviderConnectionById: vi.fn(async () => ({ id: "codex-1", provider: "codex", isActive: true })),
+    }));
+    const { resolveModelConnectionRoute } = await import("@/sse/services/modelRouting.js");
+
+    await expect(resolveModelConnectionRoute({
+      provider: "codex",
+      model: "gpt-5.6-luna",
+      modelKey: "cx/gpt-5.6-luna",
+    })).resolves.toEqual({ hasRule: true, connectionIds: ["codex-1"], invalidConnectionIds: [] });
+    expect(getModelRouteByModel).toHaveBeenCalledWith("cx/gpt-5.6-luna");
+  });
 });
 
 describe("credential selection scope", () => {
@@ -217,5 +237,52 @@ describe("model route management API", () => {
       isActive: true,
     });
     expect(JSON.stringify(body)).not.toContain("secret");
+  });
+
+  it("preserves the provider prefix when creating an exact route", async () => {
+    const upsertModelRoute = vi.fn(async (model, connectionIds) => ({
+      model,
+      connectionIds,
+      isActive: true,
+    }));
+    vi.doMock("@/lib/localDb", () => ({
+      getModelRouteByModel: vi.fn(async () => null),
+      upsertModelRoute,
+      getProviderConnectionById: vi.fn(async () => ({ id: "codex-1", provider: "codex", isActive: true })),
+      getProviderConnections: vi.fn(async () => []),
+    }));
+    vi.doMock("@/sse/services/model.js", () => ({
+      getModelInfo: vi.fn(async () => ({ provider: "codex", model: "gpt-5.6-luna" })),
+    }));
+    const { POST } = await import("@/app/api/model-routing/route.js");
+    const response = await POST(new Request("http://localhost/api/model-routing", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ model: "cx/gpt-5.6-luna", connectionIds: ["codex-1"] }),
+    }));
+
+    expect(response.status).toBe(201);
+    expect(upsertModelRoute).toHaveBeenCalledWith("cx/gpt-5.6-luna", ["codex-1"], true);
+  });
+
+  it("edits a legacy bare route using the provider of its saved connection", async () => {
+    const upsertModelRoute = vi.fn(async (model, connectionIds, isActive) => ({ model, connectionIds, isActive }));
+    vi.doMock("@/lib/localDb", () => ({
+      getModelRouteByModel: vi.fn(async () => ({ model: "gpt-5.6-luna", connectionIds: ["codex-1"], isActive: true })),
+      upsertModelRoute,
+      getProviderConnections: vi.fn(async () => [{ id: "codex-1", provider: "codex", isActive: true }]),
+    }));
+    vi.doMock("@/sse/services/model.js", () => ({
+      getModelInfo: vi.fn(async () => ({ provider: "openai", model: "gpt-5.6-luna" })),
+    }));
+    const { PUT } = await import("@/app/api/model-routing/[model]/route.js");
+    const response = await PUT(new Request("http://localhost/api/model-routing/gpt-5.6-luna", {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ connectionIds: ["codex-1"], isActive: true }),
+    }), { params: Promise.resolve({ model: "gpt-5.6-luna" }) });
+
+    expect(response.status).toBe(200);
+    expect(upsertModelRoute).toHaveBeenCalledWith("gpt-5.6-luna", ["codex-1"], true);
   });
 });

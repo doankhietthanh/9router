@@ -185,7 +185,7 @@ async function handleSingleModelChat(body, modelStr, clientRawRequest = null, re
   }
 
   const { provider, model } = modelInfo;
-  const modelRoute = await resolveModelConnectionRoute({ provider, model });
+  const modelRoute = await resolveModelConnectionRoute({ provider, model, modelKey: modelStr });
   if (modelRoute.invalidConnectionIds.length > 0) {
     log.warn("ROUTING", `Ignored stale or mismatched connections for ${model}: ${modelRoute.invalidConnectionIds.join(", ")}`);
   }

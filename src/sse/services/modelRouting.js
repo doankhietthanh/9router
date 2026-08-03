@@ -1,13 +1,14 @@
 import { getModelRouteByModel, getProviderConnectionById } from "@/lib/localDb";
-import { resolveProviderId } from "@/shared/constants/providers";
+import { getProviderAlias, resolveProviderId } from "@/shared/constants/providers";
 
 /**
  * Resolve an active exact-model route into usable connection IDs.
  * A missing/inactive route is intentionally different from an active route
  * whose connections are all stale: the latter must fail closed at runtime.
  */
-export async function resolveModelConnectionRoute({ provider, model }) {
-  const route = await getModelRouteByModel(model);
+export async function resolveModelConnectionRoute({ provider, model, modelKey = null }) {
+  const prefixedKey = modelKey || `${getProviderAlias(resolveProviderId(provider))}/${model}`;
+  const route = await getModelRouteByModel(prefixedKey) || await getModelRouteByModel(model);
   if (!route || route.isActive === false) {
     return { hasRule: false, connectionIds: null, invalidConnectionIds: [] };
   }

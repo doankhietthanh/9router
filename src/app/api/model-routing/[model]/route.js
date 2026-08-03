@@ -13,13 +13,14 @@ function normalizeConnectionIds(connectionIds) {
   return [...new Set(connectionIds.map((id) => String(id).trim()).filter(Boolean))];
 }
 
-async function validateConnections(model, connectionIds, isActive) {
+async function validateConnections(model, connectionIds, isActive, legacyProvider = null) {
   const ids = normalizeConnectionIds(connectionIds);
   if (isActive !== false && ids.length === 0) {
     return { error: "At least one connectionId is required for an active route" };
   }
   const modelInfo = await getModelInfo(model);
-  const provider = resolveProviderId(modelInfo.provider);
+  let provider = resolveProviderId(modelInfo.provider);
+  if (legacyProvider && !model.includes("/")) provider = legacyProvider;
   if (!provider) return { error: "Model must resolve to a provider" };
   const connections = await getProviderConnections();
   const selected = ids.map((id) => connections.find((connection) => connection.id === id) || null);
@@ -51,7 +52,15 @@ export async function PUT(request, { params }) {
     const existing = await getModelRouteByModel(model);
     if (!existing) return NextResponse.json({ error: "Model route not found" }, { status: 404 });
     const body = await request.json();
-    const validation = await validateConnections(model, body.connectionIds, body.isActive);
+    const allConnections = await getProviderConnections();
+    const existingProviders = existing.connectionIds
+      .map((id) => allConnections.find((connection) => connection.id === id)?.provider)
+      .filter(Boolean)
+      .map(resolveProviderId);
+    const legacyProvider = existingProviders.length > 0 && existingProviders.every((value) => value === existingProviders[0])
+      ? existingProviders[0]
+      : null;
+    const validation = await validateConnections(model, body.connectionIds, body.isActive, legacyProvider);
     if (validation.error) return NextResponse.json({ error: validation.error }, { status: 400 });
     const route = await upsertModelRoute(model, validation.connectionIds, validation.isActive);
     return NextResponse.json(route);
