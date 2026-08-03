@@ -288,9 +288,7 @@ function RouteCard({ route, onEdit, onToggle, onDelete }) {
             <table className="w-full min-w-[720px] text-left text-sm">
               <thead className="bg-background text-xs uppercase tracking-wide text-text-muted">
                 <tr>
-                  <th className="px-3 py-2 font-medium">ID</th>
-                  <th className="px-3 py-2 font-medium">Email</th>
-                  <th className="px-3 py-2 font-medium">Name</th>
+                  <th className="px-3 py-2 font-medium">Account</th>
                   <th className="px-3 py-2 font-medium">Provider</th>
                   <th className="px-3 py-2 font-medium">Status</th>
                 </tr>
@@ -298,9 +296,12 @@ function RouteCard({ route, onEdit, onToggle, onDelete }) {
               <tbody className="divide-y divide-border">
                 {route.connections.map((connection) => (
                   <tr key={connection.id}>
-                    <td className="px-3 py-3 font-mono text-xs text-text-main" title={connection.id}>{connection.id}</td>
-                    <td className="px-3 py-3 text-text-main">{connection.email || "—"}</td>
-                    <td className="px-3 py-3 text-text-main">{connection.name || "—"}</td>
+                    <td className="px-3 py-3">
+                      <span className="block truncate font-medium text-text-main">{connection.name || connection.email || "—"}</span>
+                      {connection.email && connection.email !== connection.name && (
+                        <span className="block truncate text-xs text-text-muted">{connection.email}</span>
+                      )}
+                    </td>
                     <td className="px-3 py-3 text-text-muted">{connection.provider || "—"}</td>
                     <td className="px-3 py-3">
                       <span className={`rounded-full px-2 py-0.5 text-xs ${connection.isActive ? "bg-emerald-500/10 text-emerald-600" : "bg-black/5 text-text-muted"}`}>
