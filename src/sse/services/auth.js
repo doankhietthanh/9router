@@ -21,6 +21,8 @@ export async function getProviderCredentials(provider, excludeConnectionIds = nu
     ? excludeConnectionIds
     : (excludeConnectionIds ? new Set([excludeConnectionIds]) : new Set());
   const preferredConnectionId = options?.preferredConnectionId || null;
+  const hasScopedRoute = Array.isArray(options?.allowedConnectionIds);
+  const allowedConnectionIds = hasScopedRoute ? new Set(options.allowedConnectionIds) : null;
   // Acquire mutex to prevent race conditions
   const currentMutex = selectionMutex;
   let resolveMutex;
@@ -34,6 +36,7 @@ export async function getProviderCredentials(provider, excludeConnectionIds = nu
 
     // Inject a virtual connection for no-auth free providers (with optional proxy pool from settings)
     if (FREE_PROVIDERS[providerId]?.noAuth) {
+      if (hasScopedRoute && !allowedConnectionIds.has("noauth")) return null;
       const settings = await getSettings();
       const override = (settings.providerStrategies || {})[providerId] || {};
       const strategy = override.rotateStrategy || "none";
@@ -59,7 +62,10 @@ export async function getProviderCredentials(provider, excludeConnectionIds = nu
       };
     }
 
-    const connections = await getProviderConnections({ provider: providerId, isActive: true });
+    const allConnections = await getProviderConnections({ provider: providerId, isActive: true });
+    const connections = hasScopedRoute
+      ? allConnections.filter((connection) => allowedConnectionIds.has(connection.id))
+      : allConnections;
     log.debug("AUTH", `${provider} | total connections: ${connections.length}, excludeIds: ${excludeSet.size > 0 ? [...excludeSet].join(",") : "none"}, model: ${model || "any"}`);
 
     if (connections.length === 0) {

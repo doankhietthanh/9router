@@ -57,3 +57,85 @@ describe("model route persistence", () => {
     );
   });
 });
+
+describe("model route resolution", () => {
+  it("returns no rule when the model has no active route", async () => {
+    vi.doMock("@/lib/localDb", () => ({
+      getModelRouteByModel: vi.fn(async () => null),
+      getProviderConnectionById: vi.fn(),
+    }));
+    const { resolveModelConnectionRoute } = await import("@/sse/services/modelRouting.js");
+
+    await expect(resolveModelConnectionRoute({ provider: "openai", model: "gpt-4" }))
+      .resolves.toEqual({ hasRule: false, connectionIds: null, invalidConnectionIds: [] });
+  });
+
+  it("keeps only active connections for the resolved provider in configured order", async () => {
+    const connections = {
+      a: { id: "a", provider: "openai", isActive: true },
+      b: { id: "b", provider: "openai", isActive: true },
+      c: { id: "c", provider: "anthropic", isActive: true },
+      d: { id: "d", provider: "openai", isActive: false },
+    };
+    vi.doMock("@/lib/localDb", () => ({
+      getModelRouteByModel: vi.fn(async () => ({
+        model: "gpt-5.6-sol",
+        connectionIds: ["b", "a", "c", "d", "missing"],
+        isActive: true,
+      })),
+      getProviderConnectionById: vi.fn(async (id) => connections[id] || null),
+    }));
+    const { resolveModelConnectionRoute } = await import("@/sse/services/modelRouting.js");
+
+    await expect(resolveModelConnectionRoute({ provider: "openai", model: "gpt-5.6-sol" }))
+      .resolves.toEqual({
+        hasRule: true,
+        connectionIds: ["b", "a"],
+        invalidConnectionIds: ["c", "d", "missing"],
+      });
+  });
+
+  it("keeps an active route even when every configured connection is stale", async () => {
+    vi.doMock("@/lib/localDb", () => ({
+      getModelRouteByModel: vi.fn(async () => ({
+        model: "gpt-5.6-sol",
+        connectionIds: ["missing"],
+        isActive: true,
+      })),
+      getProviderConnectionById: vi.fn(async () => null),
+    }));
+    const { resolveModelConnectionRoute } = await import("@/sse/services/modelRouting.js");
+
+    await expect(resolveModelConnectionRoute({ provider: "openai", model: "gpt-5.6-sol" }))
+      .resolves.toEqual({ hasRule: true, connectionIds: [], invalidConnectionIds: ["missing"] });
+  });
+});
+
+describe("credential selection scope", () => {
+  it("never selects a provider connection outside the model allowlist", async () => {
+    const connections = [
+      { id: "a", provider: "openai", isActive: true, priority: 1, providerSpecificData: {} },
+      { id: "b", provider: "openai", isActive: true, priority: 2, providerSpecificData: {} },
+      { id: "c", provider: "openai", isActive: true, priority: 3, providerSpecificData: {} },
+    ];
+    vi.doMock("@/lib/localDb", () => ({
+      getProviderConnections: vi.fn(async () => connections),
+      getSettings: vi.fn(async () => ({ fallbackStrategy: "fill-first" })),
+      getProxyPools: vi.fn(async () => []),
+      updateProviderConnection: vi.fn(),
+      validateApiKey: vi.fn(),
+    }));
+    vi.doMock("@/lib/network/connectionProxy", () => ({
+      resolveConnectionProxyConfig: vi.fn(async () => ({})),
+      pickProxyPoolId: vi.fn(),
+    }));
+    const { getProviderCredentials } = await import("@/sse/services/auth.js");
+
+    const credentials = await getProviderCredentials("openai", null, "gpt-5.6-sol", {
+      allowedConnectionIds: ["a", "b"],
+    });
+
+    expect(["a", "b"]).toContain(credentials.connectionId);
+    expect(credentials.connectionId).not.toBe("c");
+  });
+});

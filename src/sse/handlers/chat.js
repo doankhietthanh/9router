@@ -22,6 +22,7 @@ import { detectFormatByEndpoint } from "open-sse/translator/formats.js";
 import * as log from "../utils/logger.js";
 import { updateProviderCredentials, checkAndRefreshToken } from "../services/tokenRefresh.js";
 import { getProjectIdForConnection } from "open-sse/services/projectId.js";
+import { resolveModelConnectionRoute } from "../services/modelRouting.js";
 
 /**
  * Handle chat completion request
@@ -184,6 +185,10 @@ async function handleSingleModelChat(body, modelStr, clientRawRequest = null, re
   }
 
   const { provider, model } = modelInfo;
+  const modelRoute = await resolveModelConnectionRoute({ provider, model });
+  if (modelRoute.invalidConnectionIds.length > 0) {
+    log.warn("ROUTING", `Ignored stale or mismatched connections for ${model}: ${modelRoute.invalidConnectionIds.join(", ")}`);
+  }
 
   // Routing shown in the unified "▶" line (client model → provider/model)
 
@@ -196,7 +201,9 @@ async function handleSingleModelChat(body, modelStr, clientRawRequest = null, re
   let lastStatus = null;
 
   while (true) {
-    const credentials = await getProviderCredentials(provider, excludeConnectionIds, model);
+    const credentials = await getProviderCredentials(provider, excludeConnectionIds, model, {
+      allowedConnectionIds: modelRoute.hasRule ? modelRoute.connectionIds : null,
+    });
 
     // All accounts unavailable
     if (!credentials || credentials.allRateLimited) {
@@ -207,6 +214,10 @@ async function handleSingleModelChat(body, modelStr, clientRawRequest = null, re
         return unavailableResponse(status, `[${provider}/${model}] ${errorMsg}`, credentials.retryAfter, credentials.retryAfterHuman);
       }
       if (excludeConnectionIds.size === 0) {
+        if (modelRoute.hasRule) {
+          log.warn("ROUTING", `No configured connection is available for ${provider}/${model}`);
+          return errorResponse(HTTP_STATUS.SERVICE_UNAVAILABLE, `No configured connection is available for model: ${model}`);
+        }
         log.warn("AUTH", `No active credentials for provider: ${provider}`);
         return errorResponse(HTTP_STATUS.NOT_FOUND, `No active credentials for provider: ${provider}`);
       }
