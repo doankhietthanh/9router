@@ -24,8 +24,8 @@ async function validateConnections(model, connectionIds, isActive, legacyProvide
   if (!provider) return { error: "Model must resolve to a provider" };
   const connections = await getProviderConnections();
   const selected = ids.map((id) => connections.find((connection) => connection.id === id) || null);
-  if (selected.some((connection) => !connection || connection.isActive === false)) {
-    return { error: "All selected connections must be active and exist" };
+  if (selected.some((connection) => !connection)) {
+    return { error: "All selected connections must exist" };
   }
   if (selected.some((connection) => resolveProviderId(connection.provider) !== provider)) {
     return { error: "Selected connections must match the model provider" };

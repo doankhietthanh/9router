@@ -323,6 +323,39 @@ describe("model route management API", () => {
     expect(upsertModelRoute).toHaveBeenCalledWith("cx/gpt-5.6-luna", ["codex-1"], true);
   });
 
+  it("updates a route with an inactive connection from the model provider", async () => {
+    const upsertModelRoute = vi.fn(async (model, connectionIds, isActive) => ({
+      model,
+      connectionIds,
+      isActive,
+    }));
+    vi.doMock("@/lib/localDb", () => ({
+      getModelRouteByModel: vi.fn(async () => ({
+        model: "gpt-5.6-sol",
+        connectionIds: ["openai-active"],
+        isActive: true,
+      })),
+      upsertModelRoute,
+      deleteModelRoute: vi.fn(),
+      getProviderConnections: vi.fn(async () => [
+        { id: "openai-active", provider: "openai", isActive: true },
+        { id: "openai-inactive", provider: "openai", isActive: false },
+      ]),
+    }));
+    vi.doMock("@/sse/services/model.js", () => ({
+      getModelInfo: vi.fn(async () => ({ provider: "openai", model: "gpt-5.6-sol" })),
+    }));
+    const { PUT } = await import("@/app/api/model-routing/[model]/route.js");
+    const response = await PUT(new Request("http://localhost/api/model-routing/gpt-5.6-sol", {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ connectionIds: ["openai-inactive"], isActive: true }),
+    }), { params: Promise.resolve({ model: "gpt-5.6-sol" }) });
+
+    expect(response.status).toBe(200);
+    expect(upsertModelRoute).toHaveBeenCalledWith("gpt-5.6-sol", ["openai-inactive"], true);
+  });
+
   it("edits a legacy bare route using the provider of its saved connection", async () => {
     const upsertModelRoute = vi.fn(async (model, connectionIds, isActive) => ({ model, connectionIds, isActive }));
     vi.doMock("@/lib/localDb", () => ({
