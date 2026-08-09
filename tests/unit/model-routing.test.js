@@ -180,6 +180,64 @@ describe("credential selection scope", () => {
 });
 
 describe("model route management API", () => {
+  it("creates a route with an inactive connection from the model provider", async () => {
+    const upsertModelRoute = vi.fn(async (model, connectionIds, isActive) => ({
+      model,
+      connectionIds,
+      isActive,
+    }));
+    vi.doMock("@/lib/localDb", () => ({
+      getModelRoutes: vi.fn(async () => []),
+      getModelRouteByModel: vi.fn(async () => null),
+      upsertModelRoute,
+      getProviderConnections: vi.fn(async () => []),
+      getProviderConnectionById: vi.fn(async () => ({
+        id: "openai-inactive",
+        provider: "openai",
+        isActive: false,
+      })),
+    }));
+    vi.doMock("@/sse/services/model.js", () => ({
+      getModelInfo: vi.fn(async () => ({ provider: "openai", model: "gpt-5.6-sol" })),
+    }));
+    const { POST } = await import("@/app/api/model-routing/route.js");
+    const response = await POST(new Request("http://localhost/api/model-routing", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        model: "gpt-5.6-sol",
+        connectionIds: ["openai-inactive"],
+      }),
+    }));
+
+    expect(response.status).toBe(201);
+    expect(upsertModelRoute).toHaveBeenCalledWith("gpt-5.6-sol", ["openai-inactive"], true);
+  });
+
+  it("rejects a missing connection with an existence-specific error", async () => {
+    vi.doMock("@/lib/localDb", () => ({
+      getModelRoutes: vi.fn(async () => []),
+      getModelRouteByModel: vi.fn(async () => null),
+      upsertModelRoute: vi.fn(),
+      getProviderConnections: vi.fn(async () => []),
+      getProviderConnectionById: vi.fn(async () => null),
+    }));
+    vi.doMock("@/sse/services/model.js", () => ({
+      getModelInfo: vi.fn(async () => ({ provider: "openai", model: "gpt-5.6-sol" })),
+    }));
+    const { POST } = await import("@/app/api/model-routing/route.js");
+    const response = await POST(new Request("http://localhost/api/model-routing", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ model: "gpt-5.6-sol", connectionIds: ["missing"] }),
+    }));
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({
+      error: "All selected connections must exist",
+    });
+  });
+
   it("rejects a connection from a different provider", async () => {
     vi.doMock("@/lib/localDb", () => ({
       getModelRoutes: vi.fn(async () => []),

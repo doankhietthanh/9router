@@ -44,8 +44,8 @@ async function validateRouteInput(model, connectionIds, isActive) {
   if (!provider) return { error: "Model must resolve to a provider" };
 
   const connections = await Promise.all(normalizedIds.map((id) => getProviderConnectionById(id)));
-  if (connections.some((connection) => !connection || connection.isActive === false)) {
-    return { error: "All selected connections must be active and exist" };
+  if (connections.some((connection) => !connection)) {
+    return { error: "All selected connections must exist" };
   }
   if (connections.some((connection) => resolveProviderId(connection.provider) !== provider)) {
     return { error: "Selected connections must match the model provider" };
