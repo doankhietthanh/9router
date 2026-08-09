@@ -32,7 +32,7 @@ export default function ModelRoutingPage() {
       if (!routesResponse.ok) throw new Error(routesData.error || "Failed to load model routes");
       if (!connectionsResponse.ok) throw new Error(connectionsData.error || "Failed to load connections");
       setRoutes(routesData.routes || []);
-      setConnections((connectionsData.connections || []).filter((connection) => connection.isActive !== false));
+      setConnections(connectionsData.connections || []);
     } catch (error) {
       setMessage({ type: "error", text: error.message });
     } finally {
@@ -209,23 +209,36 @@ export default function ModelRoutingPage() {
               <span className="text-xs text-text-muted">{form.connectionIds.length} selected</span>
             </div>
             <div className="mt-2 grid max-h-[320px] gap-2 overflow-y-auto sm:grid-cols-2">
-              {connections.map((connection) => (
-                <label key={connection.id} className="flex min-w-0 cursor-pointer items-start gap-3 rounded-lg border border-border px-3 py-2.5 text-sm hover:bg-surface-2">
-                  <input
-                    type="checkbox"
-                    checked={form.connectionIds.includes(connection.id)}
-                    onChange={() => toggleConnection(connection.id)}
-                    className="mt-1"
-                  />
-                  <span className="min-w-0">
-                    <span className="block truncate font-medium text-text-main">{connection.name || connection.email || connection.id}</span>
-                    <span className="block truncate text-xs text-text-muted">{connection.email || connection.id}</span>
-                    <span className="block text-[11px] text-text-muted">{connection.provider}</span>
-                  </span>
-                </label>
-              ))}
+              {connections.map((connection) => {
+                const isActive = connection.isActive !== false;
+                return (
+                  <label key={connection.id} className="flex min-w-0 cursor-pointer items-start gap-3 rounded-lg border border-border px-3 py-2.5 text-sm hover:bg-surface-2">
+                    <input
+                      type="checkbox"
+                      checked={form.connectionIds.includes(connection.id)}
+                      onChange={() => toggleConnection(connection.id)}
+                      className="mt-1"
+                    />
+                    <span className="min-w-0 flex-1">
+                      <span className="flex items-center gap-2">
+                        <span className="min-w-0 flex-1 truncate font-medium text-text-main">
+                          {connection.name || connection.email || connection.id}
+                        </span>
+                        <span
+                          title={isActive ? "Active account" : "Inactive account"}
+                          className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] ${isActive ? "bg-emerald-500/10 text-emerald-600" : "bg-black/5 text-text-muted"}`}
+                        >
+                          {isActive ? "Active" : "Inactive"}
+                        </span>
+                      </span>
+                      <span className="block truncate text-xs text-text-muted">{connection.email || connection.id}</span>
+                      <span className="block text-[11px] text-text-muted">{connection.provider}</span>
+                    </span>
+                  </label>
+                );
+              })}
             </div>
-            {connections.length === 0 && <p className="mt-2 text-sm text-text-muted">No active accounts available.</p>}
+            {connections.length === 0 && <p className="mt-2 text-sm text-text-muted">No accounts available.</p>}
           </div>
 
           <Toggle
