@@ -237,7 +237,7 @@ export default function ProviderLimits() {
           console.warn(
             `[ProviderLimits] Connection not found for ${provider}, skipping`,
           );
-          return;
+          return false;
         }
 
         if (response.status === 401) {
@@ -255,7 +255,7 @@ export default function ProviderLimits() {
             [connectionId]: quotaEntry,
           }));
           setQuotaCache(connectionId, quotaEntry);
-          return;
+          return false;
         }
 
         throw new Error(`HTTP ${response.status}: ${errorMsg}`);
@@ -279,6 +279,7 @@ export default function ProviderLimits() {
         [connectionId]: quotaEntry,
       }));
       setQuotaCache(connectionId, quotaEntry);
+      return data.quotaStateChanged === true;
     } catch (error) {
       console.error(
         `[ProviderLimits] Error fetching quota for ${provider} (${connectionId}):`,
@@ -288,6 +289,7 @@ export default function ProviderLimits() {
         ...prev,
         [connectionId]: error.message || "Failed to fetch quota",
       }));
+      return false;
     } finally {
       setLoading((prev) => ({ ...prev, [connectionId]: false }));
     }
@@ -486,11 +488,15 @@ export default function ProviderLimits() {
         filterQuotaStateByConnections(prev, visibleConnections),
       );
 
-      await Promise.all(
+      const stateChanges = await Promise.all(
         visibleConnections
           .filter(shouldFetch)
           .map((conn) => fetchQuota(conn.id, conn.provider)),
       );
+
+      if (stateChanges.some(Boolean)) {
+        await fetchConnections(page);
+      }
 
       setLastUpdated(new Date());
     } catch (error) {
@@ -515,9 +521,12 @@ export default function ProviderLimits() {
         filterQuotaStateByConnections(prev, visibleConnections),
       );
 
-      await Promise.all(
+      const stateChanges = await Promise.all(
         visibleConnections.map((conn) => fetchQuota(conn.id, conn.provider)),
       );
+      if (stateChanges.some(Boolean)) {
+        await fetchConnections(page);
+      }
       setLastUpdated(new Date());
     };
 
