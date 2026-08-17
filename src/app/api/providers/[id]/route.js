@@ -5,6 +5,7 @@ import {
   updateProviderConnection,
   deleteProviderConnection,
 } from "@/models";
+import { clearQuotaAutoDisableData } from "@/lib/quotaAutoDisable";
 
 function normalizeProxyConfig(body = {}) {
   const hasAnyProxyField =
@@ -135,10 +136,13 @@ export async function PUT(request, { params }) {
         proxyPoolResult.hasProxyPoolField
       )
     ) {
-      updateData.providerSpecificData = {
+      const mergedProviderSpecificData = {
         ...(existing.providerSpecificData || {}),
         ...(providerSpecificData || {}),
       };
+      updateData.providerSpecificData = isActive !== undefined
+        ? clearQuotaAutoDisableData(mergedProviderSpecificData)
+        : mergedProviderSpecificData;
 
       if (proxyConfig.hasAnyProxyField) {
         updateData.providerSpecificData.connectionProxyEnabled = proxyConfig.connectionProxyEnabled;
