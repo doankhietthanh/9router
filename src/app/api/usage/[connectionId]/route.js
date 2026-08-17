@@ -6,6 +6,11 @@ import { getUsageForProvider } from "open-sse/services/usage.js";
 import { getExecutor } from "open-sse/executors/index.js";
 import { resolveConnectionProxyConfig } from "@/lib/network/connectionProxy";
 import { USAGE_APIKEY_PROVIDERS } from "@/shared/constants/providers";
+import {
+  evaluatePrimaryQuota,
+  buildQuotaAutoDisableData,
+  clearQuotaAutoDisableData,
+} from "@/lib/quotaAutoDisable";
 
 // Detect auth-expired messages returned by usage providers instead of throwing
 const AUTH_EXPIRED_PATTERNS = ["expired", "authentication", "unauthorized", "401", "re-authorize"];
@@ -183,7 +188,35 @@ export async function GET(request, { params }) {
       }
     }
 
-    return Response.json(usage);
+    let quotaStateChanged = false;
+    const evaluation = evaluatePrimaryQuota(usage?.quotas);
+    if (evaluation.evaluable) {
+      const autoDisabled = connection.providerSpecificData?.quotaAutoDisabled === true;
+      try {
+        if (evaluation.depleted && connection.isActive !== false && !autoDisabled) {
+          await updateProviderConnection(connection.id, {
+            isActive: false,
+            providerSpecificData: buildQuotaAutoDisableData(
+              connection.providerSpecificData,
+              evaluation,
+            ),
+            updatedAt: new Date().toISOString(),
+          });
+          quotaStateChanged = true;
+        } else if (!evaluation.depleted && autoDisabled) {
+          await updateProviderConnection(connection.id, {
+            isActive: true,
+            providerSpecificData: clearQuotaAutoDisableData(connection.providerSpecificData),
+            updatedAt: new Date().toISOString(),
+          });
+          quotaStateChanged = true;
+        }
+      } catch (stateError) {
+        console.warn(`[Usage] ${connection.provider}: quota state update failed: ${stateError.message}`);
+      }
+    }
+
+    return Response.json({ ...usage, quotaStateChanged });
   } catch (error) {
     const provider = connection?.provider ?? "unknown";
     console.warn(`[Usage] ${provider}: ${error.message}`);
