@@ -2,7 +2,12 @@ export const QUOTA_AUTO_DISABLED_KEY = "quotaAutoDisabled";
 export const QUOTA_AUTO_DISABLED_AT_KEY = "quotaAutoDisabledAt";
 export const QUOTA_AUTO_DISABLED_QUOTA_KEY = "quotaAutoDisabledQuota";
 export const QUOTA_AUTO_DISABLED_REMAINING_KEY = "quotaAutoDisabledRemaining";
+export const QUOTA_AUTO_DISABLE_ENABLED_KEY = "quotaAutoDisableEnabled";
 export const QUOTA_AUTO_DISABLE_THRESHOLD = 5;
+
+export function isQuotaAutoDisableEnabled(providerSpecificData = {}) {
+  return providerSpecificData?.[QUOTA_AUTO_DISABLE_ENABLED_KEY] !== false;
+}
 
 function finiteNumber(value) {
   const number = typeof value === "number" ? value : Number(value);

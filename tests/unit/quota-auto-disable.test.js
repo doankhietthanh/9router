@@ -3,9 +3,22 @@ import {
   evaluatePrimaryQuota,
   buildQuotaAutoDisableData,
   clearQuotaAutoDisableData,
+  isQuotaAutoDisableEnabled,
+  QUOTA_AUTO_DISABLE_ENABLED_KEY,
 } from "@/lib/quotaAutoDisable";
 
 describe("quota auto-disable", () => {
+  it("defaults quota auto-disable to enabled when the setting is absent", () => {
+    expect(isQuotaAutoDisableEnabled({})).toBe(true);
+    expect(isQuotaAutoDisableEnabled({ chatgptAccountId: "acct-1" })).toBe(true);
+  });
+
+  it("disables quota automation only when the setting is explicitly false", () => {
+    expect(isQuotaAutoDisableEnabled({ [QUOTA_AUTO_DISABLE_ENABLED_KEY]: true })).toBe(true);
+    expect(isQuotaAutoDisableEnabled({ [QUOTA_AUTO_DISABLE_ENABLED_KEY]: false })).toBe(false);
+    expect(isQuotaAutoDisableEnabled({ [QUOTA_AUTO_DISABLE_ENABLED_KEY]: "false" })).toBe(true);
+  });
+
   it("uses the first quota as the primary quota and disables at 5%", () => {
     expect(evaluatePrimaryQuota({
       session: { remaining: 5, used: 95, total: 100 },
