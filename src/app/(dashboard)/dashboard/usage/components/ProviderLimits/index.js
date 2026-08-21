@@ -42,6 +42,7 @@ import Card from "@/shared/components/Card";
 import { ConfirmModal, EditConnectionModal } from "@/shared/components";
 import { USAGE_SUPPORTED_PROVIDERS } from "@/shared/constants/providers";
 import { useCopyToClipboard } from "@/shared/hooks/useCopyToClipboard";
+import { isQuotaAutoDisableEnabled } from "@/lib/quotaAutoDisable";
 
 // Maps the stored providerSpecificData.authMethod to a human label for Kiro.
 // Values come from the Kiro connect flows: builder-id/idc (device code),
@@ -139,6 +140,7 @@ export default function ProviderLimits() {
   const [connectionsLoading, setConnectionsLoading] = useState(true);
   const [deletingId, setDeletingId] = useState(null);
   const [togglingId, setTogglingId] = useState(null);
+  const [quotaAutoDisableTogglingId, setQuotaAutoDisableTogglingId] = useState(null);
   const [resettingLimitId, setResettingLimitId] = useState(null);
   const [resetConfirmState, setResetConfirmState] = useState(null);
   const [resetCreditsState, setResetCreditsState] = useState(null);
@@ -419,6 +421,30 @@ export default function ProviderLimits() {
         console.error("Error updating connection status:", error);
       } finally {
         setTogglingId(null);
+      }
+    },
+    [fetchConnections, page],
+  );
+
+  const handleToggleQuotaAutoDisable = useCallback(
+    async (connection, enabled) => {
+      setQuotaAutoDisableTogglingId(connection.id);
+      try {
+        const res = await fetch(`/api/providers/${connection.id}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            providerSpecificData: {
+              ...(connection.providerSpecificData || {}),
+              quotaAutoDisableEnabled: enabled,
+            },
+          }),
+        });
+        if (res.ok) await reconcileConnectionsPage(fetchConnections, page);
+      } catch (error) {
+        console.error("Error updating quota auto-disable setting:", error);
+      } finally {
+        setQuotaAutoDisableTogglingId(null);
       }
     },
     [fetchConnections, page],
@@ -1038,9 +1064,14 @@ export default function ProviderLimits() {
           // Use table layout for all providers
           const isInactive = conn.isActive === false;
           const isCodex = conn.provider === "codex";
+          const quotaAutoDisableEnabled = isQuotaAutoDisableEnabled(conn.providerSpecificData);
           const resetCreditCount = getCodexResetCreditCount(quota);
           const isResettingLimit = resettingLimitId === conn.id;
-          const rowBusy = deletingId === conn.id || togglingId === conn.id || isResettingLimit;
+          const quotaAutoDisableBusy = quotaAutoDisableTogglingId === conn.id;
+          const rowBusy = deletingId === conn.id
+            || togglingId === conn.id
+            || quotaAutoDisableBusy
+            || isResettingLimit;
           const rawQuotas = quota?.quotas || [];
           const visibleQuotas = filterQuotasByVisibility(conn.provider, rawQuotas, quotaVisibility);
           const hiddenQuotaRows = getHiddenQuotaRows(conn.provider, rawQuotas, quotaVisibility);
@@ -1226,6 +1257,20 @@ export default function ProviderLimits() {
                     </Tooltip>
                     <div
                       className="inline-flex items-center pl-0.5"
+                      title={quotaAutoDisableEnabled
+                        ? "Auto-disable on quota depletion"
+                        : "Quota auto-disable is off"}
+                    >
+                      <Toggle
+                        size="sm"
+                        checked={quotaAutoDisableEnabled}
+                        disabled={rowBusy}
+                        ariaLabel="Auto-disable on quota depletion"
+                        onChange={(enabled) => handleToggleQuotaAutoDisable(conn, enabled)}
+                      />
+                    </div>
+                    <div
+                      className="inline-flex items-center pl-0.5"
                       title={
                         (conn.isActive ?? true)
                           ? "Disable connection"
@@ -1236,6 +1281,7 @@ export default function ProviderLimits() {
                         size="sm"
                         checked={conn.isActive ?? true}
                         disabled={rowBusy}
+                        ariaLabel="Toggle connection status"
                         onChange={(nextActive) =>
                           handleToggleConnectionActive(conn.id, nextActive)
                         }

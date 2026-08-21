@@ -82,4 +82,36 @@ describe("provider connection manual status changes", () => {
       providerSpecificData,
     });
   });
+
+  it("persists quota automation setting without dropping provider metadata", async () => {
+    const providerSpecificData = {
+      chatgptAccountId: "acct-1",
+      proxyPoolId: "pool-1",
+    };
+    mocks.getProviderConnectionById.mockResolvedValue({
+      id: "conn-1",
+      provider: "codex",
+      providerSpecificData,
+    });
+
+    const response = await PUT(
+      new Request("http://localhost/api/providers/conn-1", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          providerSpecificData: { quotaAutoDisableEnabled: false },
+        }),
+      }),
+      { params: Promise.resolve({ id: "conn-1" }) },
+    );
+
+    expect(response.status).toBe(200);
+    expect(mocks.updateProviderConnection).toHaveBeenCalledWith("conn-1", {
+      providerSpecificData: {
+        chatgptAccountId: "acct-1",
+        proxyPoolId: "pool-1",
+        quotaAutoDisableEnabled: false,
+      },
+    });
+  });
 });
