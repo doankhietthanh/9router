@@ -132,6 +132,57 @@ describe("usage quota auto-disable route", () => {
     expect(mocks.updateProviderConnection).not.toHaveBeenCalled();
   });
 
+  it("does not auto-disable when quota automation is explicitly disabled", async () => {
+    const connection = {
+      id: "conn-1",
+      provider: "codex",
+      authType: "oauth",
+      isActive: true,
+      accessToken: "access-token",
+      providerSpecificData: { quotaAutoDisableEnabled: false },
+    };
+    mocks.getProviderConnectionById.mockResolvedValue(connection);
+    mocks.getUsageForProvider.mockResolvedValue({
+      quotas: { session: { remaining: 0, used: 100, total: 100 } },
+    });
+
+    const response = await GET(new Request("http://localhost/api/usage/conn-1"), {
+      params: Promise.resolve({ connectionId: "conn-1" }),
+    });
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ quotaStateChanged: false });
+    expect(mocks.updateProviderConnection).not.toHaveBeenCalled();
+  });
+
+  it("does not auto-enable when quota automation is explicitly disabled", async () => {
+    const connection = {
+      id: "conn-1",
+      provider: "codex",
+      authType: "oauth",
+      isActive: false,
+      accessToken: "access-token",
+      providerSpecificData: {
+        quotaAutoDisableEnabled: false,
+        quotaAutoDisabled: true,
+        quotaAutoDisabledQuota: "session",
+        quotaAutoDisabledRemaining: 0,
+      },
+    };
+    mocks.getProviderConnectionById.mockResolvedValue(connection);
+    mocks.getUsageForProvider.mockResolvedValue({
+      quotas: { session: { remaining: 80, used: 20, total: 100 } },
+    });
+
+    const response = await GET(new Request("http://localhost/api/usage/conn-1"), {
+      params: Promise.resolve({ connectionId: "conn-1" }),
+    });
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ quotaStateChanged: false });
+    expect(mocks.updateProviderConnection).not.toHaveBeenCalled();
+  });
+
   it("does not change state for a provider message without quota data", async () => {
     const connection = {
       id: "conn-1",

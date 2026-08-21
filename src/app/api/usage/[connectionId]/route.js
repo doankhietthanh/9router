@@ -10,6 +10,7 @@ import {
   evaluatePrimaryQuota,
   buildQuotaAutoDisableData,
   clearQuotaAutoDisableData,
+  isQuotaAutoDisableEnabled,
 } from "@/lib/quotaAutoDisable";
 
 // Detect auth-expired messages returned by usage providers instead of throwing
@@ -190,7 +191,7 @@ export async function GET(request, { params }) {
 
     let quotaStateChanged = false;
     const evaluation = evaluatePrimaryQuota(usage?.quotas);
-    if (evaluation.evaluable) {
+    if (evaluation.evaluable && isQuotaAutoDisableEnabled(connection.providerSpecificData)) {
       const autoDisabled = connection.providerSpecificData?.quotaAutoDisabled === true;
       try {
         if (evaluation.depleted && connection.isActive !== false && !autoDisabled) {
